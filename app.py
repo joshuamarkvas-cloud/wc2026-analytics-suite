@@ -221,7 +221,7 @@ elif section == "🎯 Match & Score Predictor":
     with pcol1:
         fig=go.Figure(data=[go.Pie(labels=[f"{home_team} Win","Draw",f"{away_team} Win"],values=[h_pct,d_pct,a_pct],hole=.55,marker=dict(colors=["#22C55E","#F5C518","#3B82F6"]))])
         fig.update_layout(title="Outcome Probability",**PLOTLY_LAYOUT,height=320,showlegend=True,legend=dict(orientation="h",y=-0.1))
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
     with pcol2:
         scores,h_lam,a_lam=predict_scoreline(model_data,home_team,away_team)
         st.markdown(f'<div class="kpi-row"><div class="kpi"><div class="val">{h_lam:.2f}</div><div class="lbl">{home_team} xG</div></div><div class="kpi"><div class="val">{a_lam:.2f}</div><div class="lbl">{away_team} xG</div></div></div>',unsafe_allow_html=True)
@@ -240,7 +240,7 @@ elif section == "🎯 Match & Score Predictor":
 
     st.markdown("<div class='sec-hdr'>Feature Breakdown</div>",unsafe_allow_html=True)
     feat_df=pd.DataFrame([{"Feature":FEAT_LABELS.get(k,k),"Value":round(v,3),"Favours":f"🏠 {home_team}" if v>0.01 else (f"✈️ {away_team}" if v<-0.01 else "Neutral")} for k,v in result["features"].items()])
-    st.dataframe(feat_df,use_container_width=True,hide_index=True)
+    st.dataframe(feat_df,width='stretch',hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════
 # GROUP SIMULATOR
@@ -251,7 +251,7 @@ elif section == "📊 Group Simulator":
     god_avg=np.mean([ELO_RATINGS.get(t,1600) for t in god[1]])
     st.markdown(f'<div class="info">🔥 <strong>Group of Death: Group {god[0]}</strong> ({", ".join(god[1])}) — avg Elo {god_avg:.0f}</div>',unsafe_allow_html=True)
 
-    if st.button("🔄 Simulate All 12 Groups",type="primary",use_container_width=True):
+    if st.button("🔄 Simulate All 12 Groups",type="primary",width='stretch'):
         with st.spinner("Simulating 72 matches…"):
             standings=simulate_group_stage(model_data)
         thirds=[]
@@ -279,13 +279,13 @@ elif section == "📊 Group Simulator":
 
         st.markdown("<div class='sec-hdr'>Best 3rd-Place Rankings</div>",unsafe_allow_html=True)
         tp_df=pd.DataFrame([{"Rank":i+1,"Team":t,"Group":g,"Elo":ELO_RATINGS.get(t,1600),"Pts":s["Pts"],"GD":s["GD"],"GF":s["GF"],"Advances":"✅" if t in adv_thirds else "❌"} for i,(t,s,g) in enumerate(thirds)])
-        st.dataframe(tp_df,use_container_width=True,hide_index=True)
+        st.dataframe(tp_df,width='stretch',hide_index=True)
 
         st.markdown("<div class='sec-hdr'>Group Strength (avg Elo)</div>",unsafe_allow_html=True)
         grp_df=pd.DataFrame([{"Group":f"Group {g}","Avg Elo":round(np.mean([ELO_RATINGS.get(t,1600) for t in teams]),0)} for g,teams in WC2026_GROUPS.items()]).sort_values("Avg Elo",ascending=True)
         fig=px.bar(grp_df,x="Avg Elo",y="Group",orientation="h",color="Avg Elo",color_continuous_scale=["#166534","#F5C518"])
         fig.update_layout(**PLOTLY_LAYOUT,height=400)
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
     else:
         st.markdown("<div style='text-align:center;padding:3rem;color:var(--muted);'><div style='font-size:3rem;'>⚽</div><div style='font-family:Bebas Neue,sans-serif;font-size:1.4rem;letter-spacing:2px;margin-top:.5rem;'>Click to simulate all 72 group stage matches</div></div>",unsafe_allow_html=True)
 
@@ -296,17 +296,17 @@ elif section == "🏆 Monte Carlo":
     st.markdown("<div class='sec-hdr'>Tournament Winner — Monte Carlo</div>",unsafe_allow_html=True)
     st.markdown('<div class="info">Simulates the full tournament thousands of times for each team\'s title odds.</div>',unsafe_allow_html=True)
     n_sims=st.slider("Simulations",500,5000,2000,step=500)
-    if st.button("🎲 Run Monte Carlo",type="primary",use_container_width=True):
+    if st.button("🎲 Run Monte Carlo",type="primary",width='stretch'):
         with st.spinner(f"Running {n_sims:,} simulations…"):
             mc=run_monte_carlo(model_data,n_sims)
         mc_df=pd.DataFrame([{"Team":t,"Group":f"Group {TEAM_GROUP[t]}","Elo":ELO_RATINGS.get(t,1600),"🏆 Win %":mc[t]["win_pct"],"🥈 Final %":mc[t]["final_pct"],"R32 %":mc[t]["r32_pct"]} for t in ALL_TEAMS])
         mc_df=mc_df.sort_values("🏆 Win %",ascending=False).reset_index(drop=True)
         mc_df.insert(0,"Rank",range(1,len(mc_df)+1))
-        st.dataframe(mc_df,use_container_width=True,hide_index=True,height=450)
+        st.dataframe(mc_df,width='stretch',hide_index=True,height=450)
         top16=mc_df.head(16)
         fig=px.bar(top16,x="🏆 Win %",y="Team",orientation="h",color="🏆 Win %",color_continuous_scale=["#166534","#F5C518"])
         fig.update_layout(**PLOTLY_LAYOUT,height=500,yaxis=dict(autorange="reversed"),title="Top 16 — Title Probability")
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
 # ═══════════════════════════════════════════════════════════════
 # BRACKET
@@ -377,7 +377,7 @@ elif section == "📉 Form & H2H":
                     fs=" ".join(f'<span class="form-{r["result"]}">{r["result"]}</span>' for r in reversed(form))
                     st.markdown(f"<div style='font-size:1.1rem;letter-spacing:2px;margin-bottom:.5rem;'>{fs}</div>",unsafe_allow_html=True)
                     fdf=pd.DataFrame([{"Date":r["date"].strftime("%Y-%m-%d"),"Opp":r["opponent"] or "?","Score":f"{r['gf']}–{r['ga']}","R":r["result"]} for r in reversed(form)])
-                    st.dataframe(fdf,use_container_width=True,hide_index=True,height=300)
+                    st.dataframe(fdf,width='stretch',hide_index=True,height=300)
         st.markdown("<div class='sec-hdr'>Head-to-Head History</div>",unsafe_allow_html=True)
         h2h=get_h2h_history(df,ft1,ft2)
         if h2h:
@@ -387,9 +387,9 @@ elif section == "📉 Form & H2H":
             # Pie of results
             fig=go.Figure(data=[go.Pie(labels=[f"{ft1} Wins","Draws",f"{ft2} Wins"],values=[hw,hd,hl],hole=.5,marker=dict(colors=["#22C55E","#F5C518","#3B82F6"]))])
             fig.update_layout(**PLOTLY_LAYOUT,height=300,title="H2H Record")
-            st.plotly_chart(fig,use_container_width=True)
+            st.plotly_chart(fig,width='stretch')
             h2h_df=pd.DataFrame([{"Date":r["date"].strftime("%Y-%m-%d"),ft1:r["home_score"],ft2:r["away_score"],"Result":r["result"],"Tournament":r["tournament"]} for r in reversed(h2h)])
-            st.dataframe(h2h_df,use_container_width=True,hide_index=True,height=350)
+            st.dataframe(h2h_df,width='stretch',hide_index=True,height=350)
         else:
             st.info(f"No H2H data between {ft1} and {ft2}.")
 
@@ -403,17 +403,17 @@ elif section == "🏅 Elo Rankings":
     elo_df.insert(0,"Rank",range(1,len(elo_df)+1))
     c1,c2=st.columns([3,2])
     with c1:
-        st.dataframe(elo_df,use_container_width=True,hide_index=True,height=600)
+        st.dataframe(elo_df,width='stretch',hide_index=True,height=600)
     with c2:
         fig=px.bar(elo_df.head(20).sort_values("Elo"),x="Elo",y="Team",orientation="h",color="Elo",color_continuous_scale=["#166534","#F5C518"])
         fig.update_layout(**PLOTLY_LAYOUT,height=600,title="Top 20")
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
     # Confederation avg
     st.markdown("<div class='sec-hdr'>Average Elo by Confederation</div>",unsafe_allow_html=True)
     conf_elo=elo_df.groupby("Confederation")["Elo"].mean().round(0).reset_index().sort_values("Elo",ascending=False)
     fig2=px.bar(conf_elo,x="Confederation",y="Elo",color="Elo",color_continuous_scale=["#166534","#F5C518"])
     fig2.update_layout(**PLOTLY_LAYOUT,height=350)
-    st.plotly_chart(fig2,use_container_width=True)
+    st.plotly_chart(fig2,width='stretch')
 
 # ═══════════════════════════════════════════════════════════════
 # UPSETS & DARK HORSES
@@ -431,7 +431,7 @@ elif section == "⚠️ Upsets & Dark Horses":
                 if dog_pct>=35:
                     upsets.append({"Group":f"Group {g}","Favourite":fav,"Underdog":dog,"Elo Gap":abs(ELO_RATINGS.get(h,1600)-ELO_RATINGS.get(a,1600)),"Upset %":round(dog_pct,1)})
     upsets.sort(key=lambda x:-x["Upset %"])
-    if upsets: st.dataframe(pd.DataFrame(upsets),use_container_width=True,hide_index=True)
+    if upsets: st.dataframe(pd.DataFrame(upsets),width='stretch',hide_index=True)
     else: st.info("No major upset candidates in group stage.")
 
     st.markdown("<div class='sec-hdr'>🌟 Dark Horses</div>",unsafe_allow_html=True)
@@ -444,7 +444,7 @@ elif section == "⚠️ Upsets & Dark Horses":
         if gap>=8 and elo>=1700:
             dh.append({"Team":t,"Group":f"Group {TEAM_GROUP[t]}","Elo":elo,"Elo Rank":elo_rank,"Pedigree Rank":ped_rank,"Underrated By":gap})
     dh.sort(key=lambda x:-x["Underrated By"])
-    if dh: st.dataframe(pd.DataFrame(dh),use_container_width=True,hide_index=True)
+    if dh: st.dataframe(pd.DataFrame(dh),width='stretch',hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════
 # WC TOP SCORERS
@@ -458,11 +458,11 @@ elif section == "⚽ WC Top Scorers":
             sc_df=pd.DataFrame(scorers); sc_df.columns=["Player","Team","Goals","Penalties"]
             sc_df.insert(0,"Rank",range(1,len(sc_df)+1))
             c1,c2=st.columns([2,3])
-            with c1: st.dataframe(sc_df,use_container_width=True,hide_index=True,height=600)
+            with c1: st.dataframe(sc_df,width='stretch',hide_index=True,height=600)
             with c2:
                 fig=px.bar(sc_df.head(15).sort_values("Goals"),x="Goals",y="Player",orientation="h",color="Goals",color_continuous_scale=["#166534","#F5C518"])
                 fig.update_layout(**PLOTLY_LAYOUT,height=600,title="Top 15 WC Scorers")
-                st.plotly_chart(fig,use_container_width=True)
+                st.plotly_chart(fig,width='stretch')
     else:
         st.info("Add goalscorers.csv to the folder.")
 
@@ -499,14 +499,14 @@ elif section == "👥 Player Dashboard":
     disp=tp[["name","wc_nation","position","sub_position","age","current_club_name","market_value_in_eur","goals","assists","international_caps"]].copy()
     disp["market_value_in_eur"]=(disp["market_value_in_eur"]/1e6).round(1)
     disp.columns=["Player","Nation","Position","Role","Age","Club","Value (€M)","Goals","Assists","Caps"]
-    st.dataframe(disp,use_container_width=True,hide_index=True,height=450)
+    st.dataframe(disp,width='stretch',hide_index=True,height=450)
 
     # Squad value by nation
     st.markdown("<div class='sec-hdr'>Squad Value by Nation</div>",unsafe_allow_html=True)
     ns=nation_summary(player_df).head(25)
     fig=px.bar(ns.sort_values("total_value_m"),x="total_value_m",y="wc_nation",orientation="h",color="total_value_m",color_continuous_scale=["#166534","#F5C518"],labels={"total_value_m":"Total Value (€M)","wc_nation":""})
     fig.update_layout(**PLOTLY_LAYOUT,height=600)
-    st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig,width='stretch')
 
     # Scatter: value vs goals
     st.markdown("<div class='sec-hdr'>Market Value vs Goal Output</div>",unsafe_allow_html=True)
@@ -514,13 +514,13 @@ elif section == "👥 Player Dashboard":
     scatter_df["value_m"]=scatter_df["market_value_in_eur"]/1e6
     fig2=px.scatter(scatter_df,x="goals",y="value_m",color="position",size="minutes",hover_name="name",hover_data=["wc_nation","age"],labels={"goals":"Goals (2023-26)","value_m":"Market Value (€M)"},opacity=0.7)
     fig2.update_layout(**PLOTLY_LAYOUT,height=500)
-    st.plotly_chart(fig2,use_container_width=True)
+    st.plotly_chart(fig2,width='stretch')
 
     # Age distribution
     st.markdown("<div class='sec-hdr'>Age Distribution by Position</div>",unsafe_allow_html=True)
     fig3=px.histogram(player_df,x="age",color="position",nbins=30,opacity=0.7,labels={"age":"Age"})
     fig3.update_layout(**PLOTLY_LAYOUT,height=400,barmode="overlay")
-    st.plotly_chart(fig3,use_container_width=True)
+    st.plotly_chart(fig3,width='stretch')
 
 # ═══════════════════════════════════════════════════════════════
 # PLAYER STYLE CLUSTERING
@@ -553,14 +553,14 @@ elif section == "🎨 Player Style Clustering":
         cent_disp["mins_per_app"]=cent_disp["mins_per_app"].round(0)
         cent_disp=cent_disp[["style","size","goals_per90","assists_per90","cards_per90","mins_per_app","height_in_cm","age"]]
         cent_disp.columns=["Style","Players","Goals/90","Assists/90","Cards/90","Mins/App","Height","Avg Age"]
-        st.dataframe(cent_disp,use_container_width=True,hide_index=True)
+        st.dataframe(cent_disp,width='stretch',hide_index=True)
 
         # Scatter plot of clusters (goals vs assists)
         st.markdown("<div class='sec-hdr'>Style Map: Goals vs Assists per 90</div>",unsafe_allow_html=True)
         plot_df=clustered[clustered["minutes"]>=600].copy()
         fig=px.scatter(plot_df,x="goals_per90",y="assists_per90",color="style",size="market_value_in_eur",hover_name="name",hover_data=["wc_nation","position","age"],labels={"goals_per90":"Goals per 90","assists_per90":"Assists per 90"},opacity=0.75)
         fig.update_layout(**PLOTLY_LAYOUT,height=550,legend=dict(orientation="h",y=-0.15))
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
         # Players by cluster
         st.markdown("<div class='sec-hdr'>Explore Players by Style</div>",unsafe_allow_html=True)
@@ -571,7 +571,7 @@ elif section == "🎨 Player Style Clustering":
         sp_disp["goals_per90"]=sp_disp["goals_per90"].round(2)
         sp_disp["assists_per90"]=sp_disp["assists_per90"].round(2)
         sp_disp.columns=["Player","Nation","Position","Age","Goals/90","Assists/90","Value (€M)"]
-        st.dataframe(sp_disp,use_container_width=True,hide_index=True)
+        st.dataframe(sp_disp,width='stretch',hide_index=True)
 
         # Cluster size pie
         st.markdown("<div class='sec-hdr'>Style Distribution</div>",unsafe_allow_html=True)
@@ -579,7 +579,7 @@ elif section == "🎨 Player Style Clustering":
         size_df.columns=["Style","Count"]
         fig2=px.pie(size_df,names="Style",values="Count",hole=0.45)
         fig2.update_layout(**PLOTLY_LAYOUT,height=400)
-        st.plotly_chart(fig2,use_container_width=True)
+        st.plotly_chart(fig2,width='stretch')
 
 # ═══════════════════════════════════════════════════════════════
 # ALL 48 TEAMS
@@ -587,11 +587,11 @@ elif section == "🎨 Player Style Clustering":
 elif section == "🗂️ All 48 Teams":
     st.markdown("<div class='sec-hdr'>All 48 Teams</div>",unsafe_allow_html=True)
     all_df=pd.DataFrame([{"Group":f"Group {TEAM_GROUP[t]}","Team":t,"Confederation":TEAM_STATS[t]["confederation"],"Elo":ELO_RATINGS.get(t,1600),"Attack":TEAM_STATS[t]["attack"],"Defense":TEAM_STATS[t]["defense"],"WC Titles":TEAM_STATS[t]["wc_titles"],"WC Apps":TEAM_STATS[t]["wc_apps"]} for t in sorted(ALL_TEAMS,key=lambda x:(TEAM_GROUP[x],x))])
-    st.dataframe(all_df,use_container_width=True,hide_index=True,height=600)
+    st.dataframe(all_df,width='stretch',hide_index=True,height=600)
     conf_df=all_df["Confederation"].value_counts().reset_index(); conf_df.columns=["Confederation","Teams"]
     fig=px.pie(conf_df,names="Confederation",values="Teams",hole=0.45)
     fig.update_layout(**PLOTLY_LAYOUT,height=400)
-    st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig,width='stretch')
 
 st.markdown("---")
 st.markdown('<div class="info"><strong>Sources:</strong> Elo (eloratings.net) · Match data (Kaggle martj42) · Player data (Kaggle davidcariboo/player-scores) · ML: scikit-learn · Viz: Plotly · Clustering: KMeans</div>',unsafe_allow_html=True)
