@@ -248,26 +248,65 @@ def build_features(home, away, df=None, gs_df=None, so_df=None):
     }
     return {k:(_safe(v) if not np.isfinite(float(v)) else float(v)) for k,v in feats.items()}
 
-def _generate_training_data(df=None, gs_df=None, so_df=None, n=10000, seed=42):
+def _precompute_team_features(df=None, gs_df=None, so_df=None):
+    """Precompute per-team stats ONCE so we don't rescan the dataframe per matchup.
+    Returns a dict: team -> {form, gpg, cpg, wc_gpg, pen}."""
+    cache={}
+    for t in TEAM_STATS:
+        if df is not None:
+            form=_team_form(df,t)
+            gpg,cpg=_team_goals(df,t)
+            wc=_wc_goals(df,t)
+            pen=_penalty_win_pct(so_df,t)
+        else:
+            form=1.0; gpg=TEAM_STATS[t]["gs"]; cpg=TEAM_STATS[t]["gc"]
+            wc=TEAM_STATS[t]["gs"]; pen=0.5
+        cache[t]={"form":form,"gpg":gpg,"cpg":cpg,"wc":wc,"pen":pen}
+    return cache
+
+
+def _fast_features(home, away, tcache, h2h_wp=0.333, h2h_gd=0.0, h2h_n=0):
+    """Build features from precomputed caches (no dataframe scan)."""
+    h,a=TEAM_STATS[home],TEAM_STATS[away]
+    h_elo=float(ELO_RATINGS.get(home,1600)); a_elo=float(ELO_RATINGS.get(away,1600))
+    hc,ac=tcache[home],tcache[away]
+    feats={
+        "elo_diff":h_elo-a_elo,"elo_home":h_elo,"elo_away":a_elo,
+        "attack_diff":float(h["attack"]-a["attack"]),
+        "defense_diff":float(h["defense"]-a["defense"]),
+        "title_diff":float(h["wc_titles"]-a["wc_titles"]),
+        "experience_diff":float(h["wc_apps"]-a["wc_apps"]),
+        "goal_diff":float(h["gs"]-a["gs"]),"defense_adv":float(a["gc"]-h["gc"]),
+        "h2h_win_pct":h2h_wp,"h2h_goal_diff_avg":h2h_gd,"h2h_matches":float(h2h_n),
+        "home_form_pts":hc["form"],"away_form_pts":ac["form"],
+        "home_goals_per_game":hc["gpg"],"away_goals_per_game":ac["gpg"],
+        "home_conceded_per_game":hc["cpg"],"away_conceded_per_game":ac["cpg"],
+        "home_penalty_win_pct":hc["pen"],"away_penalty_win_pct":ac["pen"],
+        "home_wc_goals_per_game":hc["wc"],"away_wc_goals_per_game":ac["wc"],
+    }
+    return {k:(_safe(v) if not np.isfinite(float(v)) else float(v)) for k,v in feats.items()}
+
+
+def _generate_training_data(df=None, gs_df=None, so_df=None, n=6000, seed=42):
     np.random.seed(seed)
     records=[]
     team_list=list(TEAM_STATS.keys())
     real_rows=[]
+    tcache=_precompute_team_features(df,gs_df,so_df)
     if df is not None:
         wc_set=set(TEAM_STATS.keys())
         hist=df[df["home_canon"].isin(wc_set)&df["away_canon"].isin(wc_set)].copy()
         hist=hist[hist["date"]<"2026-06-11"]
-        for _,row in hist.iterrows():
-            home,away=row["home_canon"],row["away_canon"]
+        # Vectorised outcome
+        for home,away,hg,ag in zip(hist["home_canon"],hist["away_canon"],hist["home_score"],hist["away_score"]):
             if home not in TEAM_STATS or away not in TEAM_STATS: continue
-            hg,ag=row["home_score"],row["away_score"]
             outcome="Home Win" if hg>ag else ("Away Win" if ag>hg else "Draw")
-            feats=build_features(home,away,df,gs_df,so_df)
+            feats=_fast_features(home,away,tcache)
             real_rows.append({**feats,"outcome":outcome})
     for _ in range(n):
         home=np.random.choice(team_list)
         away=np.random.choice([t for t in team_list if t!=home])
-        feats=build_features(home,away,df,gs_df,so_df)
+        feats=_fast_features(home,away,tcache)
         s=(feats["elo_diff"]*0.008+feats["attack_diff"]*0.2+feats["defense_diff"]*0.15+
            feats["title_diff"]*1.2+feats["experience_diff"]*0.25+feats["goal_diff"]*1.5+
            feats["defense_adv"]*1.5+(feats["h2h_win_pct"]-0.333)*12+
@@ -296,17 +335,18 @@ def train_models(results_path=None, goalscorers_path=None, shootouts_path=None):
         except Exception as e:
             data_source=f"synthetic (error:{e})"
     train_df,real_match_count=_generate_training_data(df,gs_df,so_df)
+    tcache=_precompute_team_features(df,gs_df,so_df)
     X=train_df[FEATURE_COLS].fillna(0.0)
     y=train_df["outcome"]
     X_train,X_test,y_train,y_test=train_test_split(X,y,test_size=0.2,random_state=42)
     classifiers={
-        "Random Forest":Pipeline([("rf",RandomForestClassifier(n_estimators=400,max_depth=12,min_samples_leaf=3,random_state=42))]),
-        "Logistic Regression":Pipeline([("scaler",StandardScaler()),("lr",LogisticRegression(max_iter=2000,C=0.5,random_state=42))]),
+        "Random Forest":Pipeline([("rf",RandomForestClassifier(n_estimators=150,max_depth=10,min_samples_leaf=3,random_state=42,n_jobs=-1))]),
+        "Logistic Regression":Pipeline([("scaler",StandardScaler()),("lr",LogisticRegression(max_iter=1000,C=0.5,random_state=42))]),
     }
     results={}
     for name,clf in classifiers.items():
         clf.fit(X_train,y_train)
-        cv=cross_val_score(clf,X_train,y_train,cv=5).mean()
+        cv=cross_val_score(clf,X_train,y_train,cv=3).mean()
         tacc=accuracy_score(y_test,clf.predict(X_test))
         results[name]={"model":clf,"cv":cv,"test_acc":tacc}
     best_name=max(results,key=lambda k:results[k]["cv"])
@@ -322,12 +362,17 @@ def train_models(results_path=None, goalscorers_path=None, shootouts_path=None):
         "classes":list(best["model"].classes_),
         "train_size":len(X_train),"test_size":len(X_test),
         "data_source":data_source,"real_matches_used":real_match_count,
-        "df":df,"gs_df":gs_df,"so_df":so_df,
+        "df":df,"gs_df":gs_df,"so_df":so_df,"tcache":tcache,
     }
 
 def predict_match(model_data, home, away):
     df=model_data.get("df"); gs_df=model_data.get("gs_df"); so_df=model_data.get("so_df")
-    feats=build_features(home,away,df,gs_df,so_df)
+    tcache=model_data.get("tcache")
+    if tcache is not None:
+        h2h_wp,h2h_gd,h2h_n=(_h2h(df,home,away) if df is not None else (0.333,0.0,0))
+        feats=_fast_features(home,away,tcache,h2h_wp,h2h_gd,h2h_n)
+    else:
+        feats=build_features(home,away,df,gs_df,so_df)
     X=pd.DataFrame([feats])[FEATURE_COLS].fillna(0.0)
     proba=model_data["model"].predict_proba(X)[0]
     classes=model_data["classes"]
@@ -443,6 +488,16 @@ def run_monte_carlo(model_data, n_sims=5000):
     sf_counts={t:0 for t in ALL_TEAMS}
     final_counts={t:0 for t in ALL_TEAMS}
 
+    # Precompute all matchup probabilities ONCE (huge speedup)
+    prob_cache={}
+    pen_cache={}
+    for ta in ALL_TEAMS:
+        pen_cache[ta]=_penalty_win_pct(model_data.get("so_df"),ta)
+        for tb in ALL_TEAMS:
+            if ta==tb: continue
+            r=predict_match(model_data,ta,tb)
+            prob_cache[(ta,tb)]=[r["home_win"],r["draw"],r["away_win"]]
+
     for sim in range(n_sims):
         np.random.seed(sim)
         # Group stage
@@ -452,7 +507,6 @@ def run_monte_carlo(model_data, n_sims=5000):
             for i in range(len(teams)):
                 for j in range(i+1,len(teams)):
                     home,away=teams[i],teams[j]
-                    r=predict_match(model_data,home,away)
                     h_lambda=max(0.3,TEAM_STATS[home]["gs"]*0.6+TEAM_STATS[away]["gc"]*0.4)
                     a_lambda=max(0.3,TEAM_STATS[away]["gs"]*0.6+TEAM_STATS[home]["gc"]*0.4)
                     hg=np.random.poisson(h_lambda); ag=np.random.poisson(a_lambda)
@@ -480,14 +534,11 @@ def run_monte_carlo(model_data, n_sims=5000):
 
         # Knockout rounds
         def play_knockout(team_a, team_b):
-            r=predict_match(model_data,team_a,team_b)
-            probs=[r["home_win"],r["draw"],r["away_win"]]
-            # In knockout, draw goes to AET/pens - slight home advantage in pens
-            h_pen=_penalty_win_pct(model_data.get("so_df"),team_a)
+            probs=prob_cache.get((team_a,team_b),[0.4,0.25,0.35])
             outcome=np.random.choice(["H","D","A"],p=probs)
             if outcome=="H": return team_a
             if outcome=="A": return team_b
-            return team_a if np.random.random()<h_pen else team_b
+            return team_a if np.random.random()<pen_cache[team_a] else team_b
 
         round_teams=qualified[:]
         np.random.shuffle(round_teams)
